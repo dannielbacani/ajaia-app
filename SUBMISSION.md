@@ -47,7 +47,7 @@ The application includes a **1-click Persona Switcher** in the top navigation ba
 # 1. Install dependencies
 npm install
 
-# 2. Setup environment variables (pre-configured with live Neon database)
+# 2. Copy .env.example to .env and set DATABASE_URL to any Postgres (free Neon/Supabase works)
 cp .env.example .env
 
 # 3. Synchronize database and seed data

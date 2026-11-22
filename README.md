@@ -66,7 +66,7 @@ cd ajaia-app
 npm install
 
 # 3. Environment variables
-# Copy .env.example to .env (pre-configured with Neon cloud PostgreSQL connection)
+# Copy .env.example to .env, then set DATABASE_URL to any Postgres (a free Neon/Supabase project works)
 cp .env.example .env
 
 # 4. Push database schema and seed test data
