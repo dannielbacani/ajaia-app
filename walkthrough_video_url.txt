@@ -1,0 +1,18 @@
+Ajaia Collaborative Document Editor - Walkthrough Video
+
+1. Included MP4 Video File:
+   File Name: ajaia_walkthrough_demo.mp4 (located in this submission folder)
+   Format: 1080p H.264 / 30 FPS / AAC
+   Encoded with: FFmpeg & Playwright actual live footage
+
+2. Video Coverage:
+   - 0:00 - Reviewer Persona Switcher & Workspace Overview
+   - 0:10 - Document Creation, Renaming, and TipTap Rich-Text Formatting
+   - 0:25 - Debounced Cloud Autosave & Persistence Validation
+   - 0:30 - Document Export (Markdown)
+   - 0:35 - File Ingestion (Markdown file parsing into live document)
+   - 0:40 - Relational Cross-User Sharing (Danniel grants Bob Editor access)
+   - 0:45 - Collaborator Perspective (Bob opens shared document and edits)
+   - 0:48 - Access Control Boundary (Charlie restricted workspace)
+
+Note: For Google Drive submission, upload `ajaia_walkthrough_demo.mp4` directly to your Drive folder. If an unlisted YouTube or Loom link is preferred, you can upload this MP4 file and paste the link here.
