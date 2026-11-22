@@ -45,8 +45,8 @@ class MouseGlider {
     const fromX = this.x;
     const fromY = this.y;
     const dist = Math.hypot(targetX - fromX, targetY - fromY);
-    const ms = Math.min(800, Math.max(220, dist * 0.65));
-    const steps = Math.max(12, Math.round(ms / 16));
+    const ms = Math.min(750, Math.max(220, dist * 0.6));
+    const steps = Math.max(10, Math.round(ms / 16));
 
     for (let i = 1; i <= steps; i++) {
       const k = ease(i / steps);
@@ -124,7 +124,7 @@ async function run() {
     fs.mkdirSync(videoDir, { recursive: true });
   }
 
-  console.log("Launching Chrome with cursor simulation and navy caption bar...");
+  console.log("Launching Chrome with synchronized non-overlapping scene timings...");
   const browser = await chromium.launch({
     executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     headless: true,
@@ -138,7 +138,6 @@ async function run() {
     },
   });
 
-  // Inject cursor script on every page load
   await context.addInitScript(CURSOR_JS);
 
   const page = await context.newPage();
@@ -147,77 +146,74 @@ async function run() {
 
   console.log(`Navigating to ${baseUrl}...`);
   await page.goto(baseUrl, { waitUntil: "networkidle" });
-  await page.mouse.move(720, 450); // initial cursor placement
-  await page.waitForTimeout(1000);
+  await page.mouse.move(720, 450);
+  await page.waitForTimeout(500);
 
-  // Scene 1: Reviewer Persona Switcher
-  console.log("Scene 1: Persona switching...");
+  // Scene 1: Persona Switcher (0.5s - 9.2s)
+  console.log("Scene 1 (0.5s - 9.2s): Reviewer Persona Switcher...");
   await setCaptionBar(page, "Reviewer Persona Switcher: 1-click permission testing", 1);
-  await glider.click(page.locator('button[title*="Switch user"]'), { pauseAfter: 800 });
+  await page.waitForTimeout(2000);
+  await glider.click(page.locator('button[title*="Switch user"]'), { pauseAfter: 1000 });
+  await glider.click(page.locator('button.w-full:has-text("Bob Smith")'), { pauseAfter: 2000 });
 
-  // Switch to Bob Smith
-  await glider.click(page.locator('button.w-full:has-text("Bob Smith")'), { pauseAfter: 1200 });
-
-  // Scene 2: Shared with Me
-  console.log("Scene 2: Inspecting Bob's shared documents...");
+  // Scene 2: Shared with Me (9.2s - 16.5s)
+  console.log("Scene 2 (9.2s - 16.5s): Workspaces separated by ownership...");
   await setCaptionBar(page, "Workspaces separated by ownership: Bob's shared documents", 2);
-  await glider.click(page.locator('button:has-text("Shared with Me")'), { pauseAfter: 1500 });
+  await glider.click(page.locator('button:has-text("Shared with Me")'), { pauseAfter: 2200 });
 
   // Switch back to Danniel
   await glider.click(page.locator('button[title*="Switch user"]'), { pauseAfter: 600 });
-  await glider.click(page.locator('button.w-full:has-text("Danniel Bacani")'), { pauseAfter: 1200 });
+  await glider.click(page.locator('button.w-full:has-text("Danniel Bacani")'), { pauseAfter: 1500 });
 
-  // Scene 3: Document Creation & Renaming
-  console.log("Scene 3: Creating a new document and renaming...");
+  // Scene 3: Document Creation & Title (16.5s - 23.0s)
+  console.log("Scene 3 (16.5s - 23.0s): Creating document and inline title sync...");
   await setCaptionBar(page, "Creating new document with inline title synchronization", 3);
   await glider.click(page.locator('button:has-text("New Document")'), { pauseAfter: 500 });
   await page.waitForURL(/\/documents\//, { timeout: 10000 });
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(1000);
 
   const titleInput = page.locator('input[placeholder="Untitled Document"]');
   await glider.click(titleInput, { pauseAfter: 200 });
   await titleInput.fill("Engineering & Product Roadmap 2026");
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(1500);
 
-  // Scene 4: Rich-Text Formatting
-  console.log("Scene 4: TipTap rich-text formatting with toolbar controls...");
+  // Scene 4: Rich-Text Formatting (23.0s - 32.0s)
+  console.log("Scene 4 (23.0s - 32.0s): TipTap WYSIWYG editor...");
   await setCaptionBar(page, "TipTap WYSIWYG editor: Headings, Bold, Italic & Lists", 4);
   const editor = page.locator(".tiptap");
   await glider.click(editor, { pauseAfter: 300 });
 
   await page.keyboard.type("Ajaia Collaborative Editor Overview");
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(300);
 
-  // Apply Heading 1 with cursor
-  await glider.click(page.locator('button[title="Heading 1"]'), { pauseAfter: 400 });
+  // Apply Heading 1
+  await glider.click(page.locator('button[title="Heading 1"]'), { pauseAfter: 300 });
   await page.keyboard.press("Enter");
 
   // Type body paragraph
   await page.keyboard.type("This document demonstrates real-time formatting, persistence, and role-based sharing:");
   await page.keyboard.press("Enter");
 
-  // Add bullet list with cursor
-  await glider.click(page.locator('button[title="Bulleted List"]'), { pauseAfter: 400 });
+  // Add bullet list
+  await glider.click(page.locator('button[title="Bulleted List"]'), { pauseAfter: 300 });
   await page.keyboard.type("Rich-text formatting with Bold, Italic, and Underline");
   await page.keyboard.press("Enter");
   await page.keyboard.type("Instant Markdown & plain text file ingestion");
-  await page.keyboard.press("Enter");
-  await page.keyboard.type("Reliable debounced cloud persistence with PostgreSQL");
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(1800);
 
-  // Scene 5: Persistence & Export
-  console.log("Scene 5: Persistence and export...");
+  // Scene 5: Persistence & Export (32.0s - 40.0s)
+  console.log("Scene 5 (32.0s - 40.0s): Debounced autosave & export...");
   await setCaptionBar(page, "Debounced cloud autosave (800ms) & single-click export", 5);
-  await page.waitForTimeout(2000); // verify 'Saved at' badge
-  await glider.click(page.locator('button[title="Download Markdown copy"]'), { pauseAfter: 1000 });
+  await page.waitForTimeout(2500); // verify 'Saved at' badge
+  await glider.click(page.locator('button[title="Download Markdown copy"]'), { pauseAfter: 1200 });
 
   // Return to Dashboard
   await glider.click(page.locator('a[title="Back to All Documents"]'), { pauseAfter: 500 });
   await page.waitForURL(baseUrl, { timeout: 10000 });
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(1000);
 
-  // Scene 6: File Ingestion (Markdown Import)
-  console.log("Scene 6: Ingesting markdown file...");
+  // Scene 6: File Ingestion (40.0s - 47.0s)
+  console.log("Scene 6 (40.0s - 47.0s): Ingesting markdown file...");
   await setCaptionBar(page, "File ingestion: Uploading Markdown (.md) into editable draft", 6);
   const sampleFilePath = path.resolve(__dirname, "../Sprint_Retrospective.md");
   const fileChooserPromise = page.waitForEvent("filechooser");
@@ -229,14 +225,13 @@ async function run() {
 
   // Wait for navigation into newly imported document
   await page.waitForURL(/\/documents\//, { timeout: 10000 });
-  await page.waitForTimeout(1800);
+  await page.waitForTimeout(2500);
 
-  // Scene 7: Relational Sharing
-  console.log("Scene 7: Sharing document with Bob Smith...");
+  // Scene 7: Relational Sharing (47.0s - 54.0s)
+  console.log("Scene 7 (47.0s - 54.0s): Relational sharing with Bob Smith...");
   await setCaptionBar(page, "Relational sharing: Granting Bob Smith 'Can Edit' access", 7);
   await glider.click(page.locator('button:has-text("Share")'), { pauseAfter: 800 });
 
-  // Click quick select button for Bob
   const bobBtn = page.locator('button:has-text("+Bob Smith")');
   if (await bobBtn.isVisible()) {
     await glider.click(bobBtn, { pauseAfter: 400 });
@@ -245,39 +240,36 @@ async function run() {
   }
 
   // Click submit share inside modal
-  await glider.click(page.locator('form button[type="submit"]'), { pauseAfter: 1500 });
-
-  // Copy document link
-  await glider.click(page.locator('button:has-text("Copy Document Link")'), { pauseAfter: 600 });
+  await glider.click(page.locator('form button[type="submit"]'), { pauseAfter: 1200 });
 
   // Close modal
-  await glider.click(page.locator('button:has-text("Done")'), { pauseAfter: 800 });
+  await glider.click(page.locator('button:has-text("Done")'), { pauseAfter: 600 });
 
   // Back to dashboard
   await glider.click(page.locator('a[title="Back to All Documents"]'), { pauseAfter: 500 });
   await page.waitForURL(baseUrl, { timeout: 10000 });
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(1000);
 
-  // Scene 8: Collaborator Perspective & Access Boundaries
-  console.log("Scene 8: Switching to Bob to verify shared editing...");
+  // Scene 8: Collaborator Perspective & Edits (54.0s - 62.0s)
+  console.log("Scene 8 (54.0s - 62.0s): Bob opens shared document and edits...");
   await setCaptionBar(page, "Bob Smith receives document in 'Shared with Me' and edits", 8);
   await glider.click(page.locator('button[title*="Switch user"]'), { pauseAfter: 600 });
-  await glider.click(page.locator('button.w-full:has-text("Bob Smith")'), { pauseAfter: 1200 });
+  await glider.click(page.locator('button.w-full:has-text("Bob Smith")'), { pauseAfter: 1000 });
 
-  await glider.click(page.locator('button:has-text("Shared with Me")'), { pauseAfter: 1500 });
+  await glider.click(page.locator('button:has-text("Shared with Me")'), { pauseAfter: 1200 });
 
   // Bob opens the newly shared imported document
   const firstDoc = page.locator('a[href*="/documents/"]').first();
   await glider.click(firstDoc, { pauseAfter: 500 });
   await page.waitForURL(/\/documents\//, { timeout: 10000 });
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(1200);
 
   // Bob adds an engineering collaborator note
   await glider.click(page.locator(".tiptap"), { pauseAfter: 300 });
   await page.keyboard.press("End");
   await page.keyboard.press("Enter");
   await page.keyboard.type("Reviewed and approved by Bob Smith (Collaborator).");
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(3000);
 
   console.log("Demo flow complete! Closing browser and saving video...");
   await page.close();
@@ -299,7 +291,7 @@ async function run() {
   const ffmpegCmd = `ffmpeg -y -i "${latestVideo}" -vf "scale=1920:1080:flags=lanczos,fps=30" -c:v libx264 -preset slow -crf 19 -pix_fmt yuv420p -movflags +faststart "${finalMp4Path}"`;
   execSync(ffmpegCmd, { stdio: "inherit" });
 
-  console.log(`\n Walkthrough video successfully generated with gliding cursor pointer & navy caption bar: ${finalMp4Path}`);
+  console.log(`\n Walkthrough video recording complete: ${finalMp4Path}`);
 }
 
 run().catch((err) => {
