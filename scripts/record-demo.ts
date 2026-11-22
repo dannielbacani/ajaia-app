@@ -1,9 +1,21 @@
-import { chromium, Page } from "playwright";
+import { chromium, Page, Locator } from "playwright";
 import path from "path";
 import fs from "fs";
 import { execSync } from "child_process";
 
-// House style cursor & click ripple from pr-demo-video skill
+const ROOT = path.resolve(__dirname, "..");
+const BASE = "https://ajaia-app-ruddy.vercel.app";
+const scenes: { id: string; caption: string; text: string }[] = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "scenes.json"), "utf8")
+);
+const { pad, durations } = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "durations.json"), "utf8")
+) as { pad: number; durations: Record<string, number> };
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const BAR = 48;
+
+// Cursor + click ripple (house style from the pr-demo-video skill)
 const CURSOR_JS = `(() => {
   if (window.__demoCursor) return;
   window.__demoCursor = true;
@@ -13,17 +25,12 @@ const CURSOR_JS = `(() => {
     c.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24"><path d="M3 2v17l4.6-4.3 3 6.8 2.8-1.2-3-6.6H17z" fill="#111" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>';
     c.style.cssText = 'position:fixed;left:0;top:0;z-index:2147483647;pointer-events:none;transform:translate(-200px,-200px);filter:drop-shadow(0 1px 3px rgba(0,0,0,.4))';
     document.documentElement.appendChild(c);
-    addEventListener('mousemove', (e) => {
-      c.style.transform = 'translate(' + (e.clientX - 3) + 'px,' + (e.clientY - 2) + 'px)';
-    }, true);
+    addEventListener('mousemove', (e) => { c.style.transform = 'translate(' + (e.clientX - 3) + 'px,' + (e.clientY - 2) + 'px)'; }, true);
     addEventListener('mousedown', (e) => {
       const r = document.createElement('div');
       r.style.cssText = 'position:fixed;z-index:2147483646;pointer-events:none;width:44px;height:44px;border-radius:50%;border:3px solid #342EDC;background:rgba(52,46,220,.2);left:' + (e.clientX - 22) + 'px;top:' + (e.clientY - 22) + 'px;transform:scale(.3);opacity:1;transition:transform .45s ease-out,opacity .45s ease-out';
       document.documentElement.appendChild(r);
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        r.style.transform = 'scale(1.4)';
-        r.style.opacity = '0';
-      }));
+      requestAnimationFrame(() => requestAnimationFrame(() => { r.style.transform = 'scale(1.4)'; r.style.opacity = '0'; }));
       setTimeout(() => r.remove(), 600);
     }, true);
   };
@@ -32,269 +39,351 @@ const CURSOR_JS = `(() => {
 
 const ease = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
 
-class MouseGlider {
-  x: number = 720;
-  y: number = 450;
-  page: Page;
-
-  constructor(page: Page) {
-    this.page = page;
-  }
-
-  async moveTo(targetX: number, targetY: number) {
-    const fromX = this.x;
-    const fromY = this.y;
-    const dist = Math.hypot(targetX - fromX, targetY - fromY);
-    const ms = Math.min(750, Math.max(220, dist * 0.6));
+class Glider {
+  x = 640;
+  y = 360;
+  constructor(private page: Page) {}
+  async moveTo(tx: number, ty: number) {
+    const { x: fx, y: fy } = this;
+    const ms = Math.min(750, Math.max(220, Math.hypot(tx - fx, ty - fy) * 0.6));
     const steps = Math.max(10, Math.round(ms / 16));
-
     for (let i = 1; i <= steps; i++) {
       const k = ease(i / steps);
-      const currX = fromX + (targetX - fromX) * k;
-      const currY = fromY + (targetY - fromY) * k;
-      await this.page.mouse.move(currX, currY);
-      await new Promise((r) => setTimeout(r, ms / steps));
+      await this.page.mouse.move(fx + (tx - fx) * k, fy + (ty - fy) * k);
+      await sleep(ms / steps);
     }
-    this.x = targetX;
-    this.y = targetY;
+    this.x = tx;
+    this.y = ty;
   }
-
-  async click(locator: any, options: { pauseAfter?: number; offsetX?: number; offsetY?: number } = {}) {
-    const box = await locator.boundingBox();
-    if (box) {
-      const targetX = box.x + (options.offsetX ?? box.width / 2);
-      const targetY = box.y + (options.offsetY ?? box.height / 2);
-      await this.moveTo(targetX, targetY);
-      await new Promise((r) => setTimeout(r, 120));
-      await this.page.mouse.down();
-      await new Promise((r) => setTimeout(r, 80));
-      await this.page.mouse.up();
-      await new Promise((r) => setTimeout(r, options.pauseAfter ?? 350));
-    } else {
-      await locator.click();
-    }
+  async click(loc: Locator, pauseAfter = 350) {
+    const target = loc.first();
+    const box = await target.boundingBox();
+    if (!box) return target.click();
+    await this.moveTo(box.x + box.width / 2, box.y + box.height / 2);
+    await sleep(120);
+    await this.page.mouse.down();
+    await sleep(80);
+    await this.page.mouse.up();
+    await sleep(pauseAfter);
   }
 }
 
-// Injects the fixed navy bottom bar (#1A1B3A) in the house style
-async function setCaptionBar(page: Page, caption: string, sceneNum: number, totalScenes: number = 8) {
-  try {
-    await page.evaluate(
-      ({ caption, tag }: { caption: string; tag: string }) => {
+let current = { caption: "", n: 0 };
+async function renderBar(page: Page) {
+  await page
+    .evaluate(
+      ({ caption, tag, bar }) => {
+        document.body.style.paddingBottom = bar + "px";
         let el = document.getElementById("demo-bottom-bar");
         if (!el) {
           el = document.createElement("div");
           el.id = "demo-bottom-bar";
-          el.style.cssText = `
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 64px;
-            background: #1A1B3A;
-            color: #FFFFFF;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 32px;
-            z-index: 2147483640;
-            box-shadow: 0 -4px 16px rgba(0,0,0,0.25);
-            border-top: 1px solid rgba(255,255,255,0.1);
-            pointer-events: none;
-            font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-            transition: all 0.25s ease;
-          `;
+          el.style.cssText = `position:fixed;bottom:0;left:0;width:100%;height:${bar}px;background:#1A1B3A;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 28px;z-index:2147483640;pointer-events:none;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;`;
           document.body.appendChild(el);
         }
-        el.innerHTML = `
-          <div style="font-size: 17px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.01em;">${caption}</div>
-          <div style="font-size: 14px; font-weight: 600; color: #B0B4E6; letter-spacing: 0.02em;">${tag}</div>
-        `;
+        el.innerHTML = `<div style="font-size:17px;font-weight:700">${caption}</div><div style="font-size:14px;font-weight:600;color:#B0B4E6">${tag}</div>`;
       },
-      { caption, tag: `AJAIA-DEMO · ${sceneNum}/${totalScenes}` }
-    );
-  } catch (err) {
-    // ignore navigation race
-  }
+      { caption: current.caption, tag: `AJAIA DOCS · ${current.n}/${scenes.length}`, bar: BAR }
+    )
+    .catch(() => undefined);
 }
 
-async function run() {
-  const videoDir = path.resolve(__dirname, "../videos");
-  if (!fs.existsSync(videoDir)) {
-    fs.mkdirSync(videoDir, { recursive: true });
-  }
+async function showSlide(page: Page, title: string, bullets: string[], dur: number) {
+  await page.evaluate(
+    ({ title, bullets, dur }) => {
+      document.getElementById("demo-slide")?.remove();
+      const d = document.createElement("div");
+      d.id = "demo-slide";
+      d.style.cssText =
+        'position:fixed;inset:0;z-index:2147483000;background:linear-gradient(135deg,#1A1B3A 0%,#2B2E7A 100%);color:#fff;display:flex;flex-direction:column;justify-content:center;padding:0 100px 48px;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;';
+      const step = (dur * 0.75) / (bullets.length + 1);
+      d.innerHTML =
+        `<div style="font-size:14px;letter-spacing:.14em;color:#B0B4E6;font-weight:700;margin-bottom:12px">AJAIA DOCS · WALKTHROUGH</div>` +
+        `<h1 style="font-size:42px;margin:0 0 30px;font-weight:800">${title}</h1><ul style="list-style:none;padding:0;margin:0">` +
+        bullets
+          .map(
+            (b, i) =>
+              `<li style="font-size:23px;line-height:1.35;margin:0 0 14px;padding-left:28px;position:relative;opacity:0;transform:translateY(8px);transition:opacity .5s ease ${(i + 1) * step}s,transform .5s ease ${(i + 1) * step}s"><span style="position:absolute;left:0;color:#7C77FF">▸</span>${b}</li>`
+          )
+          .join("") +
+        `</ul>`;
+      document.body.appendChild(d);
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() =>
+          d.querySelectorAll("li").forEach((li) => {
+            (li as HTMLElement).style.opacity = "1";
+            (li as HTMLElement).style.transform = "none";
+          })
+        )
+      );
+    },
+    { title, bullets, dur }
+  );
+}
+const hideSlide = (page: Page) => page.evaluate(() => document.getElementById("demo-slide")?.remove());
 
-  console.log("Launching Chrome with synchronized non-overlapping scene timings...");
+async function run() {
+  const videoDir = path.join(ROOT, "videos");
+  fs.rmSync(videoDir, { recursive: true, force: true });
+  fs.mkdirSync(videoDir, { recursive: true });
+
   const browser = await chromium.launch({
     executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     headless: true,
   });
-
+  // 1280x720 keeps true 16:9 (no stretching) and large, readable UI text.
   const context = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
-    recordVideo: {
-      dir: videoDir,
-      size: { width: 1440, height: 900 },
-    },
+    viewport: { width: 1280, height: 720 },
+    recordVideo: { dir: videoDir, size: { width: 1280, height: 720 } },
   });
-
   await context.addInitScript(CURSOR_JS);
 
+  const t0 = Date.now();
   const page = await context.newPage();
-  const glider = new MouseGlider(page);
-  const baseUrl = "https://ajaia-app-ruddy.vercel.app";
+  page.setDefaultTimeout(20000);
+  const g = new Glider(page);
+  const starts: Record<string, number> = {};
 
-  console.log(`Navigating to ${baseUrl}...`);
-  await page.goto(baseUrl, { waitUntil: "networkidle" });
-  await page.mouse.move(720, 450);
-  await page.waitForTimeout(500);
+  await page.goto(BASE, { waitUntil: "networkidle" });
+  await page.mouse.move(640, 360);
+  await sleep(500);
 
-  // Scene 1: Persona Switcher (0.5s - 9.2s)
-  console.log("Scene 1 (0.5s - 9.2s): Reviewer Persona Switcher...");
-  await setCaptionBar(page, "Reviewer Persona Switcher: 1-click permission testing", 1);
-  await page.waitForTimeout(2000);
-  await glider.click(page.locator('button[title*="Switch user"]'), { pauseAfter: 1000 });
-  await glider.click(page.locator('button.w-full:has-text("Bob Smith")'), { pauseAfter: 2000 });
+  const persona = () => g.click(page.locator('button[title*="Switch user"]'), 700);
+  const pick = (name: string) => g.click(page.locator(`button.w-full:has-text("${name}")`), 1000);
+  const toDashboard = async () => {
+    await g.click(page.locator('a[title="Back to All Documents"]'), 400);
+    await page.waitForURL((u) => u.pathname === "/");
+    await renderBar(page);
+    await sleep(900);
+  };
+  const tool = (title: string) => g.click(page.locator(`button[title="${title}"]`), 250);
+  const type = (text: string) => page.keyboard.type(text, { delay: 28 });
 
-  // Scene 2: Shared with Me (9.2s - 16.5s)
-  console.log("Scene 2 (9.2s - 16.5s): Workspaces separated by ownership...");
-  await setCaptionBar(page, "Workspaces separated by ownership: Bob's shared documents", 2);
-  await glider.click(page.locator('button:has-text("Shared with Me")'), { pauseAfter: 2200 });
+  const actions: Record<string, (dur: number) => Promise<void>> = {
+    s01: async (d) => {
+      await showSlide(
+        page,
+        "Ajaia Docs: collaborative document editor",
+        [
+          "Create, rename, edit and reopen documents",
+          "Rich text with TipTap · autosave to Postgres",
+          "Upload .md / .txt · share with Editor or Viewer roles",
+          "Next.js · Prisma · Neon Postgres · Vercel (live)",
+        ],
+        d
+      );
+    },
+    s02: async () => {
+      await hideSlide(page);
+      await persona();
+      await pick("Bob Smith");
+      await g.click(page.locator('button:has-text("Shared with Me")'), 2500);
+      await persona();
+      await pick("Danniel Bacani");
+      await g.click(page.locator('button:has-text("Owned by Me")'), 1500);
+    },
+    s03: async () => {
+      await g.click(page.locator('button:has-text("New Document")'), 500);
+      await page.waitForURL(/\/documents\//);
+      await renderBar(page);
+      await sleep(1000);
+      const title = page.locator('input[placeholder="Untitled Document"]');
+      await g.click(title, 200);
+      await title.fill("");
+      await title.pressSequentially("Q3 Launch Plan", { delay: 55 });
+      await sleep(800);
+    },
+    s04: async () => {
+      await g.click(page.locator(".tiptap"), 300);
+      await tool("Heading 1");
+      await type("Q3 Launch Plan");
+      await page.keyboard.press("Enter");
+      await tool("Heading 2");
+      await type("Goals");
+      await page.keyboard.press("Enter");
+      await type("We will ship the ");
+      await tool("Bold (Ctrl+B)");
+      await type("editor");
+      await tool("Bold (Ctrl+B)");
+      await type(" with ");
+      await tool("Italic (Ctrl+I)");
+      await type("rich text");
+      await tool("Italic (Ctrl+I)");
+      await type(" and ");
+      await tool("Underline (Ctrl+U)");
+      await type("sharing");
+      await tool("Underline (Ctrl+U)");
+      await type(" support.");
+      await page.keyboard.press("Enter");
+      await tool("Bulleted List");
+      await type("Create and rename documents");
+      await page.keyboard.press("Enter");
+      await type("Import Markdown files");
+      await page.keyboard.press("Enter");
+      await page.keyboard.press("Enter");
+      await tool("Numbered List");
+      await type("Share with teammates");
+      await page.keyboard.press("Enter");
+      await type("Review together");
+    },
+    s05: async () => {
+      await sleep(2500);
+      await page.reload({ waitUntil: "networkidle" });
+      await renderBar(page);
+      await page.locator(".tiptap h1").first().waitFor();
+      await sleep(2500);
+      await g.click(page.locator('button[title="Download Markdown copy"]'), 1000);
+    },
+    s06: async () => {
+      await toDashboard();
+      const chooser = page.waitForEvent("filechooser");
+      await g.click(page.locator('button:has-text("Import File")'), 300);
+      await (await chooser).setFiles(path.join(ROOT, "Sprint_Retrospective.md"));
+      await page.waitForURL(/\/documents\//);
+      await renderBar(page);
+      await page.locator(".tiptap h1").first().waitFor();
+      await sleep(2500);
+    },
+    s07: async () => {
+      await g.click(page.locator('button:has-text("Share")'), 900);
+      await g.click(page.locator('button:has-text("+Bob Smith")'), 500);
+      await g.click(page.locator('form button[type="submit"]'), 2000);
+      await g.click(page.locator('button:has-text("Done")'), 600);
+    },
+    s08: async () => {
+      await toDashboard();
+      await persona();
+      await pick("Bob Smith");
+      await g.click(page.locator('button:has-text("Shared with Me")'), 1800);
+      await g.click(page.locator('a:has-text("Sprint Retrospective")'), 500);
+      await page.waitForURL(/\/documents\//);
+      await renderBar(page);
+      await page.locator(".tiptap h1").first().waitFor();
+      await sleep(1000);
+      await g.click(page.locator(".tiptap"), 300);
+      await page.keyboard.press("ControlOrMeta+ArrowDown");
+      await page.keyboard.press("Enter");
+      await type("Reviewed and approved by Bob Smith.");
+      await sleep(1500);
+    },
+    s09: async () => {
+      await persona();
+      await pick("Danniel Bacani");
+      await page.goto(`${BASE}/documents/doc_architecture`, { waitUntil: "networkidle" });
+      await renderBar(page);
+      await page.locator(".tiptap h1").first().waitFor();
+      await sleep(3500);
+      await persona();
+      await pick("Charlie Davis");
+      await sleep(3000);
+    },
+    s10: async (d) => {
+      await showSlide(
+        page,
+        "What works end to end",
+        [
+          "Create, rename, edit with rich text · autosave · survives refresh",
+          "Import .md / .txt into a new editable document",
+          "Share as Editor or Viewer · owned vs shared views",
+          "Server-side access checks (403) · 7 automated tests",
+          "Live on Vercel + Neon Postgres, seeded test users",
+        ],
+        d
+      );
+    },
+    s11: async (d) => {
+      await showSlide(
+        page,
+        "Intentionally deprioritized",
+        [
+          "Real-time multi-user editing (CRDTs): edits are last-write-wins",
+          "Real authentication: seeded personas instead",
+          "Word / PDF import: only .md and .txt",
+          "Comments and version history",
+          "Next with 2-4 hours: presence, version history, real sign-in",
+        ],
+        d
+      );
+    },
+    s12: async (d) => {
+      await showSlide(
+        page,
+        "Key implementation decisions",
+        [
+          "TipTap (ProseMirror) instead of a custom editor",
+          "Content stored as HTML in Postgres via Prisma",
+          "Relational sharing: one row per document + user, roles enforced in API",
+          "Debounced REST autosave instead of WebSockets",
+        ],
+        d
+      );
+    },
+    s13: async (d) => {
+      await showSlide(
+        page,
+        "How AI supported my workflow",
+        [
+          "Antigravity: scaffolding, Prisma schema + seed, TipTap toolbar, tests",
+          "Scripted this recording with Playwright + FFmpeg",
+          "Rejected: WebSockets / CRDTs (too heavy for the timebox)",
+          "Fixed: experimental Next.js config that broke the build",
+          "Verified with tests, live deployment, per-persona manual checks",
+        ],
+        d
+      );
+    },
+    s14: async (d) => {
+      await showSlide(
+        page,
+        "Thanks for watching",
+        [
+          "Live app: ajaia-app-ruddy.vercel.app",
+          "Test users: Danniel, Bob, Charlie (top-right switcher)",
+          "README, architecture note, AI workflow note in the folder",
+        ],
+        d
+      );
+    },
+  };
 
-  // Switch back to Danniel
-  await glider.click(page.locator('button[title*="Switch user"]'), { pauseAfter: 600 });
-  await glider.click(page.locator('button.w-full:has-text("Danniel Bacani")'), { pauseAfter: 1500 });
-
-  // Scene 3: Document Creation & Title (16.5s - 23.0s)
-  console.log("Scene 3 (16.5s - 23.0s): Creating document and inline title sync...");
-  await setCaptionBar(page, "Creating new document with inline title synchronization", 3);
-  await glider.click(page.locator('button:has-text("New Document")'), { pauseAfter: 500 });
-  await page.waitForURL(/\/documents\//, { timeout: 10000 });
-  await page.waitForTimeout(1000);
-
-  const titleInput = page.locator('input[placeholder="Untitled Document"]');
-  await glider.click(titleInput, { pauseAfter: 200 });
-  await titleInput.fill("Engineering & Product Roadmap 2026");
-  await page.waitForTimeout(1500);
-
-  // Scene 4: Rich-Text Formatting (23.0s - 32.0s)
-  console.log("Scene 4 (23.0s - 32.0s): TipTap WYSIWYG editor...");
-  await setCaptionBar(page, "TipTap WYSIWYG editor: Headings, Bold, Italic & Lists", 4);
-  const editor = page.locator(".tiptap");
-  await glider.click(editor, { pauseAfter: 300 });
-
-  await page.keyboard.type("Ajaia Collaborative Editor Overview");
-  await page.waitForTimeout(300);
-
-  // Apply Heading 1
-  await glider.click(page.locator('button[title="Heading 1"]'), { pauseAfter: 300 });
-  await page.keyboard.press("Enter");
-
-  // Type body paragraph
-  await page.keyboard.type("This document demonstrates real-time formatting, persistence, and role-based sharing:");
-  await page.keyboard.press("Enter");
-
-  // Add bullet list
-  await glider.click(page.locator('button[title="Bulleted List"]'), { pauseAfter: 300 });
-  await page.keyboard.type("Rich-text formatting with Bold, Italic, and Underline");
-  await page.keyboard.press("Enter");
-  await page.keyboard.type("Instant Markdown & plain text file ingestion");
-  await page.waitForTimeout(1800);
-
-  // Scene 5: Persistence & Export (32.0s - 40.0s)
-  console.log("Scene 5 (32.0s - 40.0s): Debounced autosave & export...");
-  await setCaptionBar(page, "Debounced cloud autosave (800ms) & single-click export", 5);
-  await page.waitForTimeout(2500); // verify 'Saved at' badge
-  await glider.click(page.locator('button[title="Download Markdown copy"]'), { pauseAfter: 1200 });
-
-  // Return to Dashboard
-  await glider.click(page.locator('a[title="Back to All Documents"]'), { pauseAfter: 500 });
-  await page.waitForURL(baseUrl, { timeout: 10000 });
-  await page.waitForTimeout(1000);
-
-  // Scene 6: File Ingestion (40.0s - 47.0s)
-  console.log("Scene 6 (40.0s - 47.0s): Ingesting markdown file...");
-  await setCaptionBar(page, "File ingestion: Uploading Markdown (.md) into editable draft", 6);
-  const sampleFilePath = path.resolve(__dirname, "../Sprint_Retrospective.md");
-  const fileChooserPromise = page.waitForEvent("filechooser");
-
-  const importBtn = page.locator('button:has-text("Import File")');
-  await glider.click(importBtn, { pauseAfter: 300 });
-  const fileChooser = await fileChooserPromise;
-  await fileChooser.setFiles(sampleFilePath);
-
-  // Wait for navigation into newly imported document
-  await page.waitForURL(/\/documents\//, { timeout: 10000 });
-  await page.waitForTimeout(2500);
-
-  // Scene 7: Relational Sharing (47.0s - 54.0s)
-  console.log("Scene 7 (47.0s - 54.0s): Relational sharing with Bob Smith...");
-  await setCaptionBar(page, "Relational sharing: Granting Bob Smith 'Can Edit' access", 7);
-  await glider.click(page.locator('button:has-text("Share")'), { pauseAfter: 800 });
-
-  const bobBtn = page.locator('button:has-text("+Bob Smith")');
-  if (await bobBtn.isVisible()) {
-    await glider.click(bobBtn, { pauseAfter: 400 });
-  } else {
-    await page.fill('input[placeholder*="bob@ajaia.io"]', "bob@ajaia.io");
+  scenes.forEach(() => undefined);
+  for (let i = 0; i < scenes.length; i++) {
+    const sc = scenes[i];
+    const dur = durations[sc.id];
+    current = { caption: sc.caption, n: i + 1 };
+    starts[sc.id] = (Date.now() - t0) / 1000; // narration begins here
+    await renderBar(page);
+    const began = Date.now();
+    console.log(`${sc.id} @ ${starts[sc.id].toFixed(1)}s (audio ${dur.toFixed(1)}s)`);
+    await actions[sc.id](dur);
+    const remaining = dur + pad - (Date.now() - began) / 1000;
+    if (remaining > 0) await sleep(remaining * 1000);
   }
+  await sleep(1500); // tail so the last sentence is never clipped
 
-  // Click submit share inside modal
-  await glider.click(page.locator('form button[type="submit"]'), { pauseAfter: 1200 });
-
-  // Close modal
-  await glider.click(page.locator('button:has-text("Done")'), { pauseAfter: 600 });
-
-  // Back to dashboard
-  await glider.click(page.locator('a[title="Back to All Documents"]'), { pauseAfter: 500 });
-  await page.waitForURL(baseUrl, { timeout: 10000 });
-  await page.waitForTimeout(1000);
-
-  // Scene 8: Collaborator Perspective & Edits (54.0s - 62.0s)
-  console.log("Scene 8 (54.0s - 62.0s): Bob opens shared document and edits...");
-  await setCaptionBar(page, "Bob Smith receives document in 'Shared with Me' and edits", 8);
-  await glider.click(page.locator('button[title*="Switch user"]'), { pauseAfter: 600 });
-  await glider.click(page.locator('button.w-full:has-text("Bob Smith")'), { pauseAfter: 1000 });
-
-  await glider.click(page.locator('button:has-text("Shared with Me")'), { pauseAfter: 1200 });
-
-  // Bob opens the newly shared imported document
-  const firstDoc = page.locator('a[href*="/documents/"]').first();
-  await glider.click(firstDoc, { pauseAfter: 500 });
-  await page.waitForURL(/\/documents\//, { timeout: 10000 });
-  await page.waitForTimeout(1200);
-
-  // Bob adds an engineering collaborator note
-  await glider.click(page.locator(".tiptap"), { pauseAfter: 300 });
-  await page.keyboard.press("End");
-  await page.keyboard.press("Enter");
-  await page.keyboard.type("Reviewed and approved by Bob Smith (Collaborator).");
-  await page.waitForTimeout(3000);
-
-  console.log("Demo flow complete! Closing browser and saving video...");
   await page.close();
   await context.close();
   await browser.close();
 
-  // Find saved webm video
-  const files = fs.readdirSync(videoDir).filter((f) => f.endsWith(".webm"));
-  if (files.length === 0) {
-    throw new Error("No recorded video found in videos directory.");
-  }
+  // Trim the page-load lead-in so narration starts ~0.5s into the video.
+  const offset = Math.max(0, starts.s01 - 0.5);
+  const adjusted: Record<string, number> = {};
+  for (const k of Object.keys(starts)) adjusted[k] = +(starts[k] - offset).toFixed(3);
+  fs.writeFileSync(path.join(__dirname, "scene_starts.json"), JSON.stringify(adjusted, null, 2));
 
-  const latestVideo = files.map((f) => path.join(videoDir, f)).sort()[files.length - 1];
-  const finalMp4Path = path.resolve(__dirname, "../ajaia_walkthrough_demo.mp4");
-
-  console.log(`Processing recorded footage with FFmpeg: ${latestVideo} -> ${finalMp4Path}`);
-
-  // FFmpeg post-processing: convert to 1080p MP4 H.264
-  const ffmpegCmd = `ffmpeg -y -i "${latestVideo}" -vf "scale=1920:1080:flags=lanczos,fps=30" -c:v libx264 -preset slow -crf 19 -pix_fmt yuv420p -movflags +faststart "${finalMp4Path}"`;
-  execSync(ffmpegCmd, { stdio: "inherit" });
-
-  console.log(`\n Walkthrough video recording complete: ${finalMp4Path}`);
+  const webm = fs
+    .readdirSync(videoDir)
+    .filter((f) => f.endsWith(".webm"))
+    .map((f) => path.join(videoDir, f))[0];
+  const silent = path.join(videoDir, "silent.mp4");
+  execSync(
+    `ffmpeg -y -ss ${offset.toFixed(3)} -i "${webm}" -vf "scale=1920:1080:flags=lanczos,fps=30" -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -movflags +faststart "${silent}"`,
+    { stdio: "ignore" }
+  );
+  console.log(`Silent video: ${silent} (trimmed ${offset.toFixed(2)}s)`);
 }
 
-run().catch((err) => {
-  console.error("Error generating demo video:", err);
+run().catch((e) => {
+  console.error("Recording failed:", e);
   process.exit(1);
 });

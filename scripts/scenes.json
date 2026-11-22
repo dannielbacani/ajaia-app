@@ -1,0 +1,72 @@
+[
+  {
+    "id": "s01",
+    "caption": "Ajaia Docs: a lightweight collaborative editor",
+    "text": "Hi, I'm Danniel Bacani, and this is my walkthrough of Ajaia Docs, a lightweight collaborative document editor inspired by Google Docs. It's built with Next.js, the TipTap editor, Prisma, and a Neon Postgres database, and it's deployed live on Vercel. In the next few minutes I'll show the main user flow, what works end to end, what I deliberately cut, my key decisions, and how AI supported my workflow."
+  },
+  {
+    "id": "s02",
+    "caption": "Main flow: seeded personas, owned vs shared documents",
+    "text": "Let's start with the main flow. To keep sharing easy to review, I used seeded users with a one-click persona switcher instead of a full login. I'm Danniel by default, and I can switch to Bob to see his workspace. Notice the two tabs, Owned by Me and Shared with Me, so owned and shared documents are always clearly separated."
+  },
+  {
+    "id": "s03",
+    "caption": "Create a new document and rename it inline",
+    "text": "Back as Danniel, I create a new document. It opens straight into the editor, and I can rename it inline using the title field."
+  },
+  {
+    "id": "s04",
+    "caption": "Rich text: headings, bold, italic, underline, lists",
+    "text": "The editor is TipTap, built on ProseMirror. From the toolbar I can apply headings, bold, italic, underline, bulleted lists, and numbered lists. Here I add a title heading and a subheading, then a sentence with bold, italic, and underlined words, followed by both kinds of lists."
+  },
+  {
+    "id": "s05",
+    "caption": "Autosave, refresh persistence and Markdown export",
+    "text": "Every change autosaves to Postgres after a short debounce, and the status badge confirms when it's saved. To prove persistence, I refresh the page, and the formatted content comes back exactly as I left it. I can also export the document as Markdown."
+  },
+  {
+    "id": "s06",
+    "caption": "File upload: .md and .txt become editable documents",
+    "text": "For file upload, I chose to turn a text or Markdown file into a new editable document. The supported types are dot M D and dot T X T, and that's stated on the dashboard and in the readme. I upload a sample sprint retrospective, and its headings and list structure are converted into rich text."
+  },
+  {
+    "id": "s07",
+    "caption": "Sharing: owner grants Bob edit access",
+    "text": "Now sharing. As the owner, I open the Share dialog, pick Bob, choose his role, and share. Owners can grant edit or view access, and remove it later."
+  },
+  {
+    "id": "s08",
+    "caption": "Bob sees the shared document and edits it",
+    "text": "Now I switch to Bob and open his dashboard. Because access lives in the database, the document shows up under Shared with Me straight away, with Danniel as the owner and Bob's role on the card. Bob opens it, clicks into the editor, adds a line, and the change is saved to the same document."
+  },
+  {
+    "id": "s09",
+    "caption": "Server-side access control: viewer and no-access cases",
+    "text": "Access is enforced on the server, not just hidden in the interface. Danniel only has view access to Bob's architecture document, so the editor is locked read-only. And Charlie, who was never invited, gets an access denied screen."
+  },
+  {
+    "id": "s10",
+    "caption": "Summary: what works end to end",
+    "text": "To summarize what works end to end: creating, renaming, and editing documents with rich text; autosave and persistence across refreshes; importing Markdown and text files; sharing with editor and viewer roles; server-side access checks; seven automated tests; and a live deployment on Vercel with a Neon database."
+  },
+  {
+    "id": "s11",
+    "caption": "What I intentionally deprioritized",
+    "text": "Here is what I intentionally deprioritized. Real-time multi-user editing, so simultaneous edits are last write wins. Real authentication, replaced by seeded personas. Word and PDF imports. And comments or version history. With another two to four hours, I would add presence indicators, version history, and real sign-in."
+  },
+  {
+    "id": "s12",
+    "caption": "Key implementation decisions",
+    "text": "Key implementation decisions. I used TipTap so I didn't build a rich text editor from scratch. Content is stored as HTML in Postgres, which keeps formatting simple and reliable. Sharing is a relational table with one row per document and user, with Owner, Editor, and Viewer roles enforced in the API routes and covered by unit tests. And I chose debounced REST autosave over WebSockets, to stay dependable within the timebox."
+  },
+  {
+    "id": "s13",
+    "caption": "How AI supported my workflow",
+    "text": "On AI: I used Antigravity as my coding assistant to scaffold the app, draft the Prisma schema and seed data, wire up the TipTap toolbar, and write tests. It also helped script this recording with Playwright and FFmpeg. I rejected its early suggestion of WebSockets and CRDTs as too heavy, and I fixed an experimental Next.js setting that broke the build. I verified everything with automated tests, the live deployment, and by testing each persona's permissions by hand."
+  },
+  {
+    "id": "s14",
+    "caption": "Thanks for watching",
+    "text": "Thanks for watching. The live app, source code, readme, architecture note, and AI workflow note are all in the submission folder. The test users are Danniel, Bob, and Charlie, selectable from the top right."
+  }
+]

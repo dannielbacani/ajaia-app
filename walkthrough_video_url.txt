@@ -1,18 +1,23 @@
 Ajaia Collaborative Document Editor - Walkthrough Video
 
-1. Included MP4 Video File:
-   File Name: ajaia_walkthrough_demo.mp4 (located in this submission folder)
-   Format: 1080p H.264 / 30 FPS / AAC
-   Encoded with: FFmpeg & Playwright actual live footage
+File: ajaia_walkthrough_demo.mp4 (in this submission folder)
+Length: ~4 min 35 s | 1080p H.264 (16:9) | AAC narration
 
-2. Video Coverage:
-   - 0:00 - Reviewer Persona Switcher & Workspace Overview
-   - 0:10 - Document Creation, Renaming, and TipTap Rich-Text Formatting
-   - 0:25 - Debounced Cloud Autosave & Persistence Validation
-   - 0:30 - Document Export (Markdown)
-   - 0:35 - File Ingestion (Markdown file parsing into live document)
-   - 0:40 - Relational Cross-User Sharing (Danniel grants Bob Editor access)
-   - 0:45 - Collaborator Perspective (Bob opens shared document and edits)
-   - 0:48 - Access Control Boundary (Charlie restricted workspace)
+Upload to an unlisted YouTube/Loom link if you prefer, and paste it here:
+  URL: (add link)
 
-Note: For Google Drive submission, upload `ajaia_walkthrough_demo.mp4` directly to your Drive folder. If an unlisted YouTube or Loom link is preferred, you can upload this MP4 file and paste the link here.
+Chapters (approx.):
+  0:03  Intro - what was built and the stack
+  0:29  Main flow - seeded personas, Owned by Me vs Shared with Me
+  0:50  Create + rename a document
+  0:59  Rich text: headings, bold, italic, underline, bullet + numbered lists
+  1:19  Autosave, refresh persistence, Markdown export
+  1:35  File upload (.md / .txt -> editable document)
+  1:54  Sharing (Editor role)
+  2:06  Collaborator (Bob) sees and edits the shared document
+  2:24  Server-side access control (Viewer read-only, no-access denied)
+  2:40  What works end to end
+  2:59  What was intentionally deprioritized
+  3:23  Key implementation decisions
+  3:51  How AI supported the workflow
+  4:21  Wrap-up
