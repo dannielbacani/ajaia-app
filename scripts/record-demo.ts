@@ -1,7 +1,54 @@
-import { chromium } from "playwright";
+import { chromium, Page } from "playwright";
 import path from "path";
 import fs from "fs";
 import { execSync } from "child_process";
+
+async function setCaption(page: Page, title: string, subtitle?: string) {
+  try {
+    await page.evaluate(
+      ({ title, subtitle }: { title: string; subtitle?: string }) => {
+        let el = document.getElementById("demo-caption-banner");
+        if (!el) {
+          el = document.createElement("div");
+          el.id = "demo-caption-banner";
+          el.style.cssText = `
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.94);
+            backdrop-filter: blur(8px);
+            color: #ffffff;
+            padding: 10px 24px;
+            border-radius: 9999px;
+            z-index: 999999;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            pointer-events: none;
+            transition: all 0.25s ease-in-out;
+          `;
+          document.body.appendChild(el);
+        }
+        el.innerHTML = `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15px; font-weight: 700; color: #ffffff; letter-spacing: -0.01em;">${title}</div>
+          ${
+            subtitle
+              ? `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 500; color: #93c5fd; margin-top: 2px;">${subtitle}</div>`
+              : ""
+          }
+        `;
+      },
+      { title, subtitle }
+    );
+  } catch (err) {
+    // ignore if evaluating during page navigation
+  }
+}
 
 async function run() {
   const videoDir = path.resolve(__dirname, "../videos");
@@ -9,10 +56,10 @@ async function run() {
     fs.mkdirSync(videoDir, { recursive: true });
   }
 
-  console.log("Launching Chrome to record actual product demo...");
+  console.log("Launching Chrome to record actual product demo with lower-third captions...");
   const browser = await chromium.launch({
     executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    headless: true, // running headless with video recording
+    headless: true,
   });
 
   const context = await browser.newContext({
@@ -28,18 +75,35 @@ async function run() {
 
   console.log(`Navigating to ${baseUrl}...`);
   await page.goto(baseUrl, { waitUntil: "networkidle" });
-  await page.waitForTimeout(2000);
-
-  // 1. Show Dashboard & Persona Switcher
-  console.log("Scene 1: Persona switching and dashboard inspection...");
-  // Open Persona dropdown
-  await page.click('button[title*="Switch user"]');
   await page.waitForTimeout(1000);
-  // Switch to Bob
+
+  // Scene 1: Welcome & Persona Switcher
+  console.log("Scene 1: Persona switching and dashboard inspection...");
+  await setCaption(
+    page,
+    "Ajaia Docs — AI-Native Collaborative Editor",
+    "Live Walkthrough by Danniel Bacani"
+  );
+  await page.waitForTimeout(2500);
+
+  await setCaption(
+    page,
+    "Reviewer Persona Switcher",
+    "1-Click persona switching to evaluate cross-user permissions without registration barriers"
+  );
+  await page.click('button[title*="Switch user"]');
+  await page.waitForTimeout(1200);
+
+  // Switch to Bob Smith
   await page.click('button:has-text("Bob Smith")');
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(1500);
 
   // Switch to 'Shared with Me' tab
+  await setCaption(
+    page,
+    "Workspaces Separated by Ownership",
+    "Inspecting Bob Smith's 'Shared with Me' documents"
+  );
   await page.click('button:has-text("Shared with Me")');
   await page.waitForTimeout(2000);
 
@@ -49,18 +113,32 @@ async function run() {
   await page.click('button:has-text("Danniel Bacani")');
   await page.waitForTimeout(1500);
 
-  // 2. Document Creation & Editing
+  // Scene 2: Document Creation & Rich Text
   console.log("Scene 2: Creating a new document and editing rich-text...");
+  await setCaption(
+    page,
+    "Document Creation & TipTap Editor",
+    "Full WYSIWYG editor with Heading 1-3, Bold, Italic, Underline & Lists"
+  );
   await page.click('button:has-text("New Document")');
   await page.waitForURL(/\/documents\//, { timeout: 10000 });
   await page.waitForTimeout(1500);
 
-  // Rename title
+  await setCaption(
+    page,
+    "Inline Document Renaming",
+    "Immediate title synchronization across the collaborative workspace"
+  );
   const titleInput = page.locator('input[placeholder="Untitled Document"]');
   await titleInput.fill("Engineering & Product Roadmap 2026");
   await page.waitForTimeout(1000);
 
   // Click editor canvas and type content
+  await setCaption(
+    page,
+    "TipTap Rich-Text Formatting",
+    "Applying Headings, styled lists, and keyboard-driven text formatting"
+  );
   const editor = page.locator(".tiptap");
   await editor.click();
   await page.keyboard.type("Ajaia Collaborative Editor Overview");
@@ -87,22 +165,37 @@ async function run() {
   await page.keyboard.type("Reliable debounced cloud persistence with PostgreSQL");
   await page.waitForTimeout(2000);
 
-  // 3. Verify Autosave
+  // Scene 3: Verify Autosave
   console.log("Scene 3: Verifying autosave status...");
-  await page.waitForTimeout(2500); // Give autosave time to show 'Saved at ...'
+  await setCaption(
+    page,
+    "Cloud Persistence Engine",
+    "Debounced 800ms autosave to Neon PostgreSQL with real-time status badge"
+  );
+  await page.waitForTimeout(3000);
 
-  // 4. Test Export
+  // Scene 4: Test Export
   console.log("Scene 4: Exporting document...");
+  await setCaption(
+    page,
+    "Document Export",
+    "Single-click export to Markdown (.md) or HTML format"
+  );
   await page.click('button[title="Download Markdown copy"]');
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(1500);
 
   // Return to Dashboard
   await page.click('a[title="Back to All Documents"]');
   await page.waitForURL(baseUrl, { timeout: 10000 });
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(1500);
 
-  // 5. Test File Import
+  // Scene 5: Test File Import
   console.log("Scene 5: Ingesting markdown file...");
+  await setCaption(
+    page,
+    "File Ingestion Engine",
+    "Upload Markdown (.md) or Plain Text (.txt) to convert into an editable document"
+  );
   const sampleFilePath = path.resolve(__dirname, "../Sprint_Retrospective.md");
   const fileChooserPromise = page.waitForEvent("filechooser");
   await page.click('button:has-text("Import File")');
@@ -113,8 +206,13 @@ async function run() {
   await page.waitForURL(/\/documents\//, { timeout: 10000 });
   await page.waitForTimeout(2000);
 
-  // 6. Sharing Flow
+  // Scene 6: Sharing Flow
   console.log("Scene 6: Sharing document with Bob Smith...");
+  await setCaption(
+    page,
+    "Relational Access Control & Sharing",
+    "Danniel grants Bob Smith 'Can Edit' collaborator permissions"
+  );
   await page.click('button:has-text("Share")');
   await page.waitForTimeout(1000);
 
@@ -144,8 +242,13 @@ async function run() {
   await page.waitForURL(baseUrl, { timeout: 10000 });
   await page.waitForTimeout(1500);
 
-  // 7. Verify from Bob's perspective
+  // Scene 7: Verify from Bob's perspective
   console.log("Scene 7: Switching to Bob to verify shared access...");
+  await setCaption(
+    page,
+    "Cross-User Verification: Bob Smith",
+    "Bob receives the shared document in 'Shared with Me' with Editor privileges"
+  );
   await page.click('button[title*="Switch user"]');
   await page.waitForTimeout(800);
   await page.click('button:has-text("Bob Smith")');
@@ -160,6 +263,11 @@ async function run() {
   await page.waitForTimeout(2000);
 
   // Bob adds an engineering collaborator note
+  await setCaption(
+    page,
+    "Collaborative Editing",
+    "Bob contributes an engineering note directly into the shared draft"
+  );
   await page.locator(".tiptap").click();
   await page.keyboard.press("End");
   await page.keyboard.press("Enter");
@@ -171,12 +279,17 @@ async function run() {
   await page.waitForURL(baseUrl, { timeout: 10000 });
   await page.waitForTimeout(1500);
 
-  // 8. Verify Charlie (Unauthorized access boundary)
+  // Scene 8: Verify Charlie (Unauthorized access boundary)
   console.log("Scene 8: Access control check for Charlie...");
+  await setCaption(
+    page,
+    "Strict Permission Boundaries",
+    "Charlie Davis has zero access to private documents or unshared drafts"
+  );
   await page.click('button[title*="Switch user"]');
   await page.waitForTimeout(800);
   await page.click('button:has-text("Charlie Davis")');
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(2500);
 
   console.log("Demo flow complete! Closing browser and saving video...");
   await page.close();
@@ -195,10 +308,10 @@ async function run() {
   console.log(`Processing recorded footage with FFmpeg: ${latestVideo} -> ${finalMp4Path}`);
 
   // FFmpeg post-processing: convert to 1080p MP4 H.264 with crisp scaling and clean frame pacing
-  const ffmpegCmd = `ffmpeg -y -i "${latestVideo}" -vf "scale=1920:1080:flags=lanczos,fps=30" -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -movflags +faststart "${finalMp4Path}"`;
+  const ffmpegCmd = `ffmpeg -y -i "${latestVideo}" -vf "scale=1920:1080:flags=lanczos,fps=30" -c:v libx264 -preset slow -crf 19 -pix_fmt yuv420p -movflags +faststart "${finalMp4Path}"`;
   execSync(ffmpegCmd, { stdio: "inherit" });
 
-  console.log(`\n Walkthrough video successfully generated: ${finalMp4Path}`);
+  console.log(`\n Walkthrough video successfully generated with burned-in lower-third captions: ${finalMp4Path}`);
 }
 
 run().catch((err) => {
